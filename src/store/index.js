@@ -1,27 +1,31 @@
 import { createStore } from 'vuex'
 import authService from '../services/authService.js'
+import databaseService from '../services/databaseService.js'
 import userService from '../services/userService.js'
 import gameService from '../services/gameService.js'
 
-const savedUserId = localStorage.getItem('userId')
-const savedLogin = localStorage.getItem('login')
-const savedAuthToken = localStorage.getItem('authToken')
+const AUTH_DATABASE_KEY = 'authentication'
+const GAME_HISTORY_DATABASE_KEY = 'game-history'
+const LEADERBOARD_DATABASE_KEY = 'leaderboard'
+const LEADERBOARD_LIMIT = 20
+const NOTIFICATION_TIMEOUT = 5000
+
 let notificationId = 0
 
 export default createStore({
   state() {
     return {
-      userId: savedUserId,
-      login: savedLogin,
-      authToken: savedAuthToken,
-      currentUser: savedUserId && savedLogin
-        ? {
-            id: savedUserId,
-            login: savedLogin
-          }
-        : null,
+      authInitialized: false,
+      userId: null,
+      login: null,
+      tokenType: null,
+      accessToken: null,
+      refreshToken: null,
+      currentUser: null,
       games: [],
       currentGame: null,
+      gameHistory: [],
+      leaderboard: [],
       usersById: {},
       notifications: []
     }
@@ -29,7 +33,11 @@ export default createStore({
 
   getters: {
     isAuthenticated(state) {
-      return Boolean(state.userId && state.authToken)
+      return Boolean(
+        state.userId
+        && state.accessToken
+        && state.refreshToken
+      )
     },
 
     currentUserLogin(state) {
@@ -42,32 +50,37 @@ export default createStore({
   },
 
   mutations: {
-    setAuth(state, payload) {
-      state.userId = payload.userId
-      state.login = payload.login
-      state.authToken = payload.authToken
-      state.currentUser = {
-        id: payload.userId,
-        login: payload.login
-      }
+    setAuthInitialized(state, initialized) {
+      state.authInitialized = initialized
+    },
 
-      localStorage.setItem('userId', payload.userId)
-      localStorage.setItem('login', payload.login)
-      localStorage.setItem('authToken', payload.authToken)
+    setAuth(state, payload) {
+      state.userId = payload.user.id
+      state.login = payload.user.login
+      state.tokenType = payload.tokenType
+      state.accessToken = payload.accessToken
+      state.refreshToken = payload.refreshToken
+      state.currentUser = payload.user
+    },
+
+    setTokens(state, payload) {
+      state.tokenType = payload.tokenType
+      state.accessToken = payload.accessToken
+      state.refreshToken = payload.refreshToken
     },
 
     clearAuth(state) {
       state.userId = null
       state.login = null
-      state.authToken = null
+      state.tokenType = null
+      state.accessToken = null
+      state.refreshToken = null
       state.currentUser = null
       state.games = []
       state.currentGame = null
+      state.gameHistory = []
+      state.leaderboard = []
       state.usersById = {}
-
-      localStorage.removeItem('userId')
-      localStorage.removeItem('login')
-      localStorage.removeItem('authToken')
     },
 
     setGames(state, games) {
@@ -85,55 +98,132 @@ export default createStore({
       state.currentGame = game
     },
 
-    addNotification(state, notification) {
-      state.notifications.push({
-        id: notificationId++,
-        ...notification
-      })
+    setGameHistory(state, games) {
+      state.gameHistory = games
     },
 
-    removeNotification(state, notificationId) {
+    setLeaderboard(state, players) {
+      state.leaderboard = players
+    },
+
+    addNotification(state, notification) {
+      state.notifications.push(notification)
+    },
+
+    removeNotification(state, id) {
       state.notifications = state.notifications.filter(
-        (notification) => notification.id !== notificationId
+        (notification) => notification.id !== id
       )
     },
 
-    clearNotification(state) {
+    clearNotifications(state) {
       state.notifications = []
     }
   },
 
   actions: {
-    async login({ commit }, payload) {
-      const authData = await authService.signIn(payload.login, payload.password)
-      const user = await userService.getUser(authData.userId, authData.authToken)
+    async initializeAuth({ commit }) {
+      try {
+        const savedAuth = await databaseService.getValue(
+          AUTH_DATABASE_KEY
+        )
 
-      commit('setAuth', {
-        userId: authData.userId,
-        login: user.login,
-        authToken: authData.authToken
-      })
+        if (
+          savedAuth?.user?.id
+          && savedAuth?.accessToken
+          && savedAuth?.refreshToken
+        ) {
+          commit('setAuth', savedAuth)
+
+          commit('setUsersById', {
+            [savedAuth.user.id]: savedAuth.user
+          })
+        }
+      } finally {
+        commit('setAuthInitialized', true)
+      }
+    },
+
+    async login({ commit }, payload) {
+      const tokens = await authService.signIn(
+        payload.login,
+        payload.password
+      )
+
+      const user = await authService.getCurrentUser(
+        tokens.type,
+        tokens.accessToken
+      )
+
+      const authentication = {
+        user,
+        tokenType: tokens.type || 'Bearer',
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken
+      }
+
+      await databaseService.setValue(
+        AUTH_DATABASE_KEY,
+        authentication
+      )
+
+      commit('setAuth', authentication)
 
       commit('setUsersById', {
         [user.id]: user
       })
     },
 
-    logout({ commit }) {
+    async refreshTokens({ state, commit }) {
+      if (!state.refreshToken || !state.currentUser) {
+        throw new Error('Refresh token is missing')
+      }
+
+      const tokens = await authService.refreshAccessToken(
+        state.refreshToken
+      )
+
+      const authentication = {
+        user: state.currentUser,
+        tokenType: tokens.type || state.tokenType || 'Bearer',
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken || state.refreshToken
+      }
+
+      await databaseService.setValue(
+        AUTH_DATABASE_KEY,
+        authentication
+      )
+
+      commit('setTokens', authentication)
+
+      return authentication
+    },
+
+    async logout({ commit }) {
       commit('clearAuth')
+      await databaseService.clear()
     },
 
     async loadGames({ commit }) {
       const games = await gameService.getAvailableGames()
-      const creatorIds = games.map((game) => game.firstPlayerId)
-      const usersById = await userService.getUsersByIds(creatorIds)
+
+      const creatorIds = games.map(
+        (game) => game.firstPlayerId
+      )
+
+      const usersById = await userService.getUsersByIds(
+        creatorIds
+      )
 
       commit('setGames', games)
       commit('setUsersById', usersById)
     },
 
-    async createGame( { commit }, computerOpponent ) {
-      const game = await gameService.createGame(computerOpponent)
+    async createGame({ commit }, computerOpponent) {
+      const game = await gameService.createGame(
+        computerOpponent
+      )
 
       commit('setCurrentGame', game)
 
@@ -150,18 +240,21 @@ export default createStore({
         game.secondPlayerId
       ]
 
-      const usersById = await userService.getUsersByIds(userIds)
+      const usersById = await userService.getUsersByIds(
+        userIds
+      )
+
       commit('setUsersById', usersById)
 
       return game
     },
 
     async loadGame({ state, commit }, gameId) {
-      // commit('setCurrentGame', null)
-  
       const game = await gameService.getGame(gameId)
 
-      const currentGameChanged = JSON.stringify(state.currentGame) !== JSON.stringify(game)
+      const currentGameChanged =
+        JSON.stringify(state.currentGame)
+        !== JSON.stringify(game)
 
       if (currentGameChanged) {
         commit('setCurrentGame', game)
@@ -172,10 +265,15 @@ export default createStore({
         game.secondPlayerId
       ].filter(Boolean)
 
-      const missingUserIds = userIds.filter((userId) => !state.usersById[userId])
+      const missingUserIds = userIds.filter(
+        (userId) => !state.usersById[userId]
+      )
 
       if (missingUserIds.length > 0) {
-        const usersById = await userService.getUsersByIds(missingUserIds)
+        const usersById = await userService.getUsersByIds(
+          missingUserIds
+        )
+
         commit('setUsersById', usersById)
       }
 
@@ -183,7 +281,10 @@ export default createStore({
     },
 
     async makeMove({ commit }, payload) {
-      const game = await gameService.makeMove(payload.gameId, payload.game)
+      const game = await gameService.makeMove(
+        payload.gameId,
+        payload.game
+      )
 
       commit('setCurrentGame', game)
 
@@ -192,18 +293,75 @@ export default createStore({
         game.secondPlayerId
       ]
 
-      const usersById = await userService.getUsersByIds(userIds)
+      const usersById = await userService.getUsersByIds(
+        userIds
+      )
+
       commit('setUsersById', usersById)
 
       return game
     },
 
-    showNotification({ commit }, notification) {
-      commit('addNotification', notification)
+    async loadGameHistory({ commit }) {
+      const games = await gameService.getGameHistory()
+
+      const userIds = games.flatMap((game) => [
+        game.firstPlayerId,
+        game.secondPlayerId
+      ])
+
+      const usersById = await userService.getUsersByIds(
+        userIds
+      )
+
+      await databaseService.setValue(
+        GAME_HISTORY_DATABASE_KEY,
+        games
+      )
+
+      commit('setGameHistory', games)
+      commit('setUsersById', usersById)
+
+      return games
     },
 
-    hideNotification({ commit }, notificationId) {
-      commit('removeNotification', notificationId)
+    async loadLeaderboard({ commit }) {
+      const players = await gameService.getLeaderboard(
+        LEADERBOARD_LIMIT
+      )
+
+      await databaseService.setValue(
+        LEADERBOARD_DATABASE_KEY,
+        players
+      )
+
+      commit('setLeaderboard', players)
+
+      return players
+    },
+
+    showNotification({ commit }, notification) {
+      const id = notificationId++
+
+      commit('addNotification', {
+        id,
+        ...notification
+      })
+
+      const timeout = notification.timeout
+        ?? NOTIFICATION_TIMEOUT
+
+      if (timeout > 0) {
+        window.setTimeout(() => {
+          commit('removeNotification', id)
+        }, timeout)
+      }
+
+      return id
+    },
+
+    hideNotification({ commit }, id) {
+      commit('removeNotification', id)
     },
 
     hideAllNotifications({ commit }) {

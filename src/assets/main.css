@@ -267,3 +267,98 @@ a.router-link-active {
         flex-direction: column;
     }
 }
+
+.history-page {
+    display: grid;
+    gap: 16px;
+}
+
+.history-list {
+    display: grid;
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.history-card {
+    display: grid;
+    gap: 8px;
+    padding: 16px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.history-card__title {
+    margin: 0;
+    font-size: 18px;
+    word-break: break-word;
+}
+
+.history-card p {
+    margin: 0;
+}
+
+.leaderboard-page {
+    display: grid;
+    gap: 16px;
+}
+
+.leaderboard-list {
+    display: grid;
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.leaderboard-card {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.leaderboard-card__position {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    background: #277e63;
+}
+
+.leaderboard-card__player {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.leaderboard-card__uuid {
+    color: #4b5563;
+    word-break: breat-all;
+}
+
+.leaderboard-card__ratio {
+    font-weight: 700;
+    text-align: right;
+}
+
+@media (max-width: 640px) {
+    .leaderboard-card {
+        grid-template-columns: 48px minmax(0, 1fr);
+    }
+
+    .leaderboard-card__ratio {
+        grid-column: 1 / -1;
+        text-align: left;
+    }
+}

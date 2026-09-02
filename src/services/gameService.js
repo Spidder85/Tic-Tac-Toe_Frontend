@@ -1,4 +1,6 @@
 import api from './api.js'
+import { createGameHistory } from '../models/gameHistoryItem.js'
+import { createLeaderboard } from '../models/leaderboardPlayer.js'
 
 export default {
   async createGame(computerOpponent) {
@@ -25,7 +27,26 @@ export default {
   },
 
   async makeMove(gameId, game) {
-    const response = await api.post(`/game/${gameId}`, game)
+    const response = await api.post(
+      `/game/${gameId}`,
+      game
+    )
+
     return response.data
+  },
+
+  async getGameHistory() {
+    const response = await api.get('/game/history')
+    return createGameHistory(response.data)
+  },
+
+  async getLeaderboard(limit) {
+    const response = await api.get('/game/leaderboard', {
+      params: {
+        limit
+      }
+    })
+
+    return createLeaderboard(response.data)
   }
 }

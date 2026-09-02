@@ -5,6 +5,8 @@ import Register from '../views/Register.vue'
 import Games from '../views/Games.vue'
 import GameCreate from '../views/GameCreate.vue'
 import ActiveGame from '../views/ActiveGame.vue'
+import GameHistory from '../views/GameHistory.vue'
+import Leaderboard from '../views/Leaderboard.vue'
 
 const routes = [
   {
@@ -50,6 +52,22 @@ const routes = [
       title: 'Текущая игра',
       requiresAuth: true
     }
+  },
+  {
+    path: '/history',
+    component: GameHistory,
+    meta: {
+      title: 'История игр',
+      requiresAuth: true
+    }
+  },
+  {
+    path: '/leaderboard',
+    component: Leaderboard,
+    meta: {
+      title: 'Лидерборд',
+      requiresAuth: true
+    }
   }
 ]
 
@@ -59,13 +77,20 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
-  document.title = to.meta.title || 'Крестики-нолики'
+  document.title =
+    to.meta.title || 'Крестики-нолики'
 
-  if (to.meta.requiresAuth && !store.getters.isAuthenticated) {
+  if (
+    to.meta.requiresAuth
+    && !store.getters.isAuthenticated
+  ) {
     return '/login'
   }
 
-  if (to.meta.public && store.getters.isAuthenticated) {
+  if (
+    to.meta.public
+    && store.getters.isAuthenticated
+  ) {
     return '/games'
   }
 
