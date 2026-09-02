@@ -344,7 +344,7 @@ a.router-link-active {
 
 .leaderboard-card__uuid {
     color: #4b5563;
-    word-break: breat-all;
+    word-break: break-all;
 }
 
 .leaderboard-card__ratio {

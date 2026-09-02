@@ -31,36 +31,44 @@ async function refreshTokens() {
 }
 
 async function handleAuthenticationFailure(error) {
-  if (!authenticationFailureInProgress) {
-    authenticationFailureInProgress = true
+  if (authenticationFailureInProgress) {
+    return
+  }
 
-    try {
-      await store.dispatch('logout')
+  authenticationFailureInProgress = true
 
-      await store.dispatch('showNotification', {
-        type: 'error',
-        text: getErrorMessage(
-          error,
-          'Сессия завершена. Выполните вход повторно'
-        )
-      })
+  try {
+    await store.dispatch('logout')
 
-      const { default: router } = await import('../router/index.js')
+    await store.dispatch('showNotification', {
+      type: 'error',
+      text: getErrorMessage(
+        error,
+        'Сессия завершена. Выполните вход повторно'
+      )
+    })
 
-      if (router.currentRoute.value.path !== '/login') {
-        await router.push('/login')
-      }
-    } finally {
-      authenticationFailureInProgress = false
+    const { default: router } = await import(
+      '../router/index.js'
+    )
+
+    if (router.currentRoute.value.path !== '/login') {
+      await router.push('/login')
     }
+  } finally {
+    authenticationFailureInProgress = false
   }
 }
 
 api.interceptors.request.use((config) => {
   const authorizationHeader = getAuthorizationHeader()
 
-  if (authorizationHeader && !config.headers.Authorization) {
-    config.headers.Authorization = authorizationHeader
+  if (
+    authorizationHeader
+    && !config.headers.Authorization
+  ) {
+    config.headers.Authorization =
+      authorizationHeader
   }
 
   return config
@@ -81,10 +89,15 @@ api.interceptors.response.use(
       return Promise.reject(error)
     }
 
-    if (
-      originalRequest._retry
-      || !store.state.refreshToken
-    ) {
+    /*
+     * Этот запрос уже был повторён после обновления токена.
+     * Ошибка будет обработана внешним catch исходного запроса.
+     */
+    if (originalRequest._retry) {
+      return Promise.reject(error)
+    }
+
+    if (!store.state.refreshToken) {
       await handleAuthenticationFailure(error)
       return Promise.reject(error)
     }
@@ -94,8 +107,17 @@ api.interceptors.response.use(
     try {
       await refreshTokens()
 
-      originalRequest.headers.Authorization =
+      const authorizationHeader =
         getAuthorizationHeader()
+
+      if (!authorizationHeader) {
+        throw new Error(
+          'Не удалось получить новый access token'
+        )
+      }
+
+      originalRequest.headers.Authorization =
+        authorizationHeader
 
       return await api(originalRequest)
     } catch (refreshError) {
