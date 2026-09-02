@@ -10,9 +10,21 @@
           Игра {{ game.id }}
         </h2>
 
-        <button type="button" @click="goToGames">
-          К списку игр
-        </button>
+        <div class="actions">
+          <button
+            type="button"
+            @click="goToLeaderboard"
+          >
+            Лидерборд
+          </button>
+
+          <button
+            type="button"
+            @click="goToGames"
+          >
+            К списку игр
+          </button>
+        </div>
       </div>
 
       <div class="players">
@@ -76,7 +88,9 @@ export default {
     },
 
     firstPlayerLogin() {
-      return this.getUserLogin(this.game.firstPlayerId)
+      return this.getUserLogin(
+        this.game.firstPlayerId
+      )
     },
 
     secondPlayerLogin() {
@@ -88,7 +102,9 @@ export default {
         return 'ожидание игрока'
       }
 
-      return this.getUserLogin(this.game.secondPlayerId)
+      return this.getUserLogin(
+        this.game.secondPlayerId
+      )
     },
 
     opponentLogin() {
@@ -96,7 +112,10 @@ export default {
         return 'Компьютер'
       }
 
-      const opponentId = getOpponentId(this.game, this.userId)
+      const opponentId = getOpponentId(
+        this.game,
+        this.userId
+      )
 
       if (!opponentId) {
         return ''
@@ -109,13 +128,13 @@ export default {
   async created() {
     await this.loadGame()
 
-    this.timerId = setInterval(() => {
+    this.timerId = window.setInterval(() => {
       this.loadGameSilently()
     }, 1000)
   },
 
   beforeUnmount() {
-    clearInterval(this.timerId)
+    window.clearInterval(this.timerId)
   },
 
   methods: {
@@ -130,9 +149,17 @@ export default {
       this.loading = true
 
       try {
-        await this.$store.dispatch('loadGame', this.gameId)
+        await this.$store.dispatch(
+          'loadGame',
+          this.gameId
+        )
       } catch (error) {
-        this.showError(getErrorMessage(error, 'Ошибка загрузки игры'))
+        this.showError(
+          getErrorMessage(
+            error,
+            'Ошибка загрузки игры'
+          )
+        )
       } finally {
         this.loading = false
       }
@@ -142,11 +169,19 @@ export default {
       if (this.loading) {
         return
       }
-      
+
       try {
-        await this.$store.dispatch('loadGame', this.gameId)
+        await this.$store.dispatch(
+          'loadGame',
+          this.gameId
+        )
       } catch (error) {
-        this.showError(getErrorMessage(error, 'Ошибка обновления игры'))
+        this.showError(
+          getErrorMessage(
+            error,
+            'Ошибка обновления игры'
+          )
+        )
       }
     },
 
@@ -159,14 +194,24 @@ export default {
           game: nextGame
         })
       } catch (error) {
-        this.showError(getErrorMessage(error, 'Ошибка хода'))
+        this.showError(
+          getErrorMessage(
+            error,
+            'Ошибка хода'
+          )
+        )
       } finally {
         this.loading = false
       }
     },
 
     getUserLogin(userId) {
-      return this.usersById[userId]?.login || userId
+      return this.usersById[userId]?.login
+        || userId
+    },
+
+    goToLeaderboard() {
+      this.$router.push('/leaderboard')
     },
 
     goToGames() {

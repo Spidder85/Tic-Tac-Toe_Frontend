@@ -29,6 +29,13 @@
         Создать игру
       </router-link>
 
+      <router-link to="/history">
+        История игр
+      </router-link>
+
+      <router-link to="/leaderboard">
+        Лидерборд
+      </router-link>
       <button type="button" class="danger-button" @click="logout">
         Выход
       </button>
@@ -42,7 +49,8 @@ export default {
 
   computed: {
     pageTitle() {
-      return this.$route.meta.title || 'Крестики-нолики'
+      return this.$route.meta.title
+        || 'Крестики-нолики'
     },
 
     currentUser() {
@@ -54,18 +62,23 @@ export default {
     },
 
     userIcon() {
-      if (!this.currentUser || !this.currentUser.login) {
+      if (
+        !this.currentUser
+        || !this.currentUser.login
+      ) {
         return '?'
       }
 
-      return this.currentUser.login.charAt(0).toUpperCase()
+      return this.currentUser.login
+        .charAt(0)
+        .toUpperCase()
     }
   },
 
   methods: {
     async logout() {
       await this.$store.dispatch('logout')
-      this.$router.push('/login')
+      await this.$router.push('/login')
     }
   }
 }
